@@ -38,8 +38,8 @@ jobs:
         run: |
           cd openwrt
           ./scripts/feeds update packages luci
-          ./scripts/feeds install -a -p packages
-          ./scripts/feeds install -a -p luci
+          ./scripts/feeds install -p packages golang
+          ./scripts/feeds install -p luci luci-base luci-mod-admin-full luci-mod-network luci-mod-system luci-mod-status
       - name: Place eproxy OpenWrt packages and local source
         run: |
           cp -R package/eproxy-core openwrt/package/eproxy-core
