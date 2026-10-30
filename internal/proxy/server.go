@@ -123,6 +123,10 @@ func (s *Server) socks5(conn net.Conn, reader *bufio.Reader) {
 	if _, err := io.ReadFull(reader, req); err != nil || req[0] != 5 {
 		return
 	}
+	if req[1] == 3 {
+		s.udpAssociate(conn, reader, req[3])
+		return
+	}
 	if req[1] != 1 {
 		socksReply(conn, 7)
 		return
