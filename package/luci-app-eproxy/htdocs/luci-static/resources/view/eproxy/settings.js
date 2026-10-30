@@ -102,7 +102,7 @@ return view.extend({
 		s = m.section(form.GridSection, 'outbound', _('Outbound nodes'),
 			_('Add named nodes using the supported protocol types. ' +
 			  'TLS certificate checking is mandatory, and keys are stored in root-only UCI configuration. ' +
-			  'Unsupported transports (REALITY, Hysteria2, SS-2022 and QUIC) are intentionally not selectable.'));
+			  'Advanced protocols require the sing-box engine; TUN and UDP need their OpenWrt kernel/network dependencies.'));
 		s.anonymous = false;
 		s.addremove = true;
 		s.sortable = false;

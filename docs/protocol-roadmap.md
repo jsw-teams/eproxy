@@ -15,3 +15,21 @@ Planned in separate audited milestones (NOT implemented):
 For each protocol require: spec references and licensing, known-answer tests, client-server integration across version matrix, security review, fuzzing, IPv4+IPv6, runtime stress tests, and an explicit feature flag. Do not label unsupported variants supported.
 
 NSS is a *router acceleration driver* and independent of eproxy protocol support; compatibility tests are required for transparent proxy flows.
+
+## Implementation status update
+
+A separate \`singbox\` engine now renders Hysteria2 (QUIC), VLESS REALITY
+(uTLS-required), Shadowsocks-2022, HTTPS subscription providers, DNS-over-HTTPS,
+TUN, IPv6 strategies and UDP handling. Configuration output is validated with
+the pinned upstream sing-box binary in CI.
+
+**Important dependency distinction:** These capabilities are powered by a
+separately installed, ABI-compatible \`sing-box\` runtime, not by a newly
+written eproxy-native QUIC/REALITY/SS-2022 implementation. The native Go engine
+keeps its narrower protocol support.
+
+The old OpenWrt 24.10.x target builds IPK, and the newer 25.12.x target builds
+APK via separate SDK matrix jobs. They are not interchangeable across releases
+or architectures. A successful SDK build verifies packaging only; modem, NSS,
+TUN routing, DNS leak behavior, firewall4 rollback and real-server protocol
+interoperability still require router test evidence.
