@@ -1,7 +1,10 @@
 {
   "luci-app-eproxy": {
-    "description": "eproxy UCI settings",
-    "read": {"uci": ["eproxy"]},
+    "description": "Manage eproxy UCI settings and read procd service status",
+    "read": {
+      "uci": ["eproxy"],
+      "ubus": {"service": ["list"]}
+    },
     "write": {"uci": ["eproxy"]}
   }
 }

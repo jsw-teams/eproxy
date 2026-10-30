@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=eproxy-core
-PKG_VERSION:=0.1.0
+PKG_VERSION:=0.2.0
 PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 PKG_LICENSE_FILES:=LICENSE
@@ -42,8 +42,17 @@ define Package/eproxy-core/install
 	$(call GoPackage/Package/Install/Bin,$(1))
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_CONF) ./files/eproxy.config $(1)/etc/config/eproxy
+	chmod 0600 $(1)/etc/config/eproxy
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/eproxy.init $(1)/etc/init.d/eproxy
+endef
+
+define Package/eproxy-core/postinst
+#!/bin/sh
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
+chmod 0600 /etc/config/eproxy
+/etc/init.d/eproxy enable
+exit 0
 endef
 
 $(eval $(call GoBinPackage,eproxy-core))

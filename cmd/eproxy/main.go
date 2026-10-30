@@ -12,14 +12,22 @@ import (
 
 func main() {
 	path := flag.String("config", "", "read eproxy JSON config from a root-owned file")
+	uci := flag.String("uci", "", "read OpenWrt UCI config directly; mutually exclusive with -config")
 	listen := flag.String("listen", "", "override config listener; loopback-only")
 	checkConfig := flag.Bool("check-config", false, "validate config without opening a network listener")
 	flag.Parse()
 
+	if *path != "" && *uci != "" {
+		log.Fatal("-config and -uci are mutually exclusive")
+	}
 	cfg := proxy.DefaultConfig()
 	if *path != "" {
 		loaded, err := proxy.LoadConfig(*path)
 		if err != nil {log.Fatalf("invalid configuration: %v",err)}
+		cfg = loaded
+	} else if *uci != "" {
+		loaded, err := proxy.LoadUCI(*uci)
+		if err != nil {log.Fatalf("invalid UCI configuration: %v",err)}
 		cfg = loaded
 	}
 	if *listen!="" {cfg.Listen=*listen}
