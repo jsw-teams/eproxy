@@ -18,3 +18,20 @@ Hysteria2 needs HTTP/3 authentication and QUIC streams/datagrams, while REALITY 
 Native direct DNS queries are encrypted. The current HTTP/SOCKS/Trojan/VLESS/SS outbound server hostnames may still use system resolver for their *proxy server bootstrap*; no global DNS leak-free guarantee is made. TUN, router-wide DNS, firewall and NSS acceleration still require target-specific device tests.
 
 The release gate is \`go test -race ./...\` plus OpenWrt SDK artifact compilation on both 24.10 (IPK) and 25.12 (APK); real-router safety is an independent gate.
+
+## Hysteria2 wire codec ? new original module
+
+\`internal/protocol/hysteria2/wire.go\` contains independently written
+RFC 9000 QUIC varints, the Hysteria2 TCP request/response stream framing, and
+single-frame UDP datagram marshal/unmarshal with strict frame length and target
+bounds. \`wire_test.go\` tests varint boundaries, the 0x401 TCP request ID,
+stream payload preservation, round trips and malformed/fragmented datagrams.
+The framing follows the public Hysteria2 protocol specification; no source
+code was imported from Mihomo, sing-box or the Hysteria project.
+
+This codec is **not yet a functioning Hysteria2 client**. It deliberately
+does not implement QUIC, HTTP/3 authentication, congestion control, Salamander,
+UDP fragment reassembly, or integration into a native outbound. Until these
+are completed and independently interop-tested, \`engine=singbox\` remains
+necessary for operational Hysteria2. The CI currently confirms the codec, not
+that native Hysteria2 can connect to arbitrary servers.
