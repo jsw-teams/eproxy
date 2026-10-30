@@ -103,7 +103,7 @@ func TestSOCKS5RejectsNoAcceptableMethod(t *testing.T) {
 }
 
 func TestFutureProtocolsExplicitlyUnsupported(t *testing.T) {
-	for _, proto := range []string{"shadowsocks-2022","trojan","vless","hysteria2"} {
+	for _, proto := range []string{"shadowsocks-2022","hysteria2","vless-reality"} {
 		if !strings.Contains(ProtocolStatus()[proto], "not yet supported") {
 			t.Errorf("unsupported protocol %s misrepresented", proto)
 		}

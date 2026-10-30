@@ -16,13 +16,22 @@ import (
 
 type Server struct {
 	dialTimeout time.Duration
+	config *Config
+	slots chan struct{}
 }
 
 func New(timeout time.Duration) *Server {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
-	return &Server{dialTimeout: timeout}
+	return &Server{dialTimeout: timeout, slots: make(chan struct{}, 256)}
+}
+
+func NewWithConfig(cfg Config) (*Server,error) {
+	if err:=cfg.Validate();err!=nil{return nil,err}
+	s:=New(cfg.Deadline())
+	s.config=&cfg
+	return s,nil
 }
 
 func (s *Server) Serve(listener net.Listener) error {
@@ -31,7 +40,12 @@ func (s *Server) Serve(listener net.Listener) error {
 		if err != nil {
 			return err
 		}
-		go s.handle(c)
+		select {
+		case s.slots <- struct{}{}:
+			go func() { defer func(){<-s.slots}(); s.handle(c) }()
+		default:
+			_ = c.Close()
+		}
 	}
 }
 
@@ -65,7 +79,11 @@ func (s *Server) httpConnect(conn net.Conn, reader *bufio.Reader) {
 		_, _ = io.WriteString(conn, "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n")
 		return
 	}
-	dest, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), s.dialTimeout)
+	if !s.httpAuthorized(req.Header.Get("Proxy-Authorization")) {
+		_, _ = io.WriteString(conn, "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"eproxy\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+		return
+	}
+	dest, err := s.dialTarget(host, port)
 	if err != nil {
 		_, _ = io.WriteString(conn, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n")
 		return
@@ -87,19 +105,18 @@ func (s *Server) socks5(conn net.Conn, reader *bufio.Reader) {
 	if _, err := io.ReadFull(reader, methods); err != nil {
 		return
 	}
+	method := byte(0)
+	if s.config!=nil && s.config.Username!="" { method=2 }
 	found := false
-	for _, method := range methods {
-		if method == 0 {
-			found = true
-		}
+	for _, offered := range methods {
+		if offered == method { found = true }
 	}
 	if !found {
 		_, _ = conn.Write([]byte{5, 0xff})
 		return
 	}
-	if _, err := conn.Write([]byte{5, 0}); err != nil {
-		return
-	}
+	if _, err := conn.Write([]byte{5, method}); err != nil { return }
+	if method==2 && !s.socksAuthorized(conn,reader) { return }
 	req := make([]byte, 4)
 	if _, err := io.ReadFull(reader, req); err != nil || req[0] != 5 {
 		return
@@ -131,7 +148,7 @@ func (s *Server) socks5(conn net.Conn, reader *bufio.Reader) {
 	portBuf := make([]byte, 2)
 	if _, err := io.ReadFull(reader, portBuf); err != nil { return }
 	port := strconv.Itoa(int(binary.BigEndian.Uint16(portBuf)))
-	dest, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), s.dialTimeout)
+	dest, err := s.dialTarget(host, port)
 	if err != nil {
 		socksReply(conn, 5)
 		return
@@ -177,9 +194,11 @@ func ProtocolStatus() map[string]string {
 	return map[string]string{
 		"http-connect": "implemented",
 		"socks5-connect": "implemented",
+		"shadowsocks-aead-aes-256-gcm": "implemented",
 		"shadowsocks-2022": fmt.Sprint(ErrNotReady),
-		"trojan": fmt.Sprint(ErrNotReady),
-		"vless": fmt.Sprint(ErrNotReady),
+		"trojan": "implemented",
+		"vless-tcp-tls": "implemented",
+		"vless-reality": fmt.Sprint(ErrNotReady),
 		"hysteria2": fmt.Sprint(ErrNotReady),
 	}
 }

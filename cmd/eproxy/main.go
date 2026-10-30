@@ -6,33 +6,42 @@ import (
 	"log"
 	"net"
 	"os"
-	"strings"
-	"time"
 
 	"github.com/jsw-teams/eproxy/internal/proxy"
 )
 
 func main() {
-	addr := flag.String("listen", "127.0.0.1:1080", "loopback-only listener address")
-	timeout := flag.Duration("dial-timeout", 10*time.Second, "upstream connection timeout")
+	path := flag.String("config", "", "read eproxy JSON config from a root-owned file")
+	listen := flag.String("listen", "", "override config listener; loopback-only")
+	checkConfig := flag.Bool("check-config", false, "validate config without opening a network listener")
 	flag.Parse()
-	host, _, err := net.SplitHostPort(*addr)
-	if err != nil || !isLoopback(host) {
-		fmt.Fprintln(os.Stderr, "eproxy refuses non-loopback listeners (no authentication)")
+
+	cfg := proxy.DefaultConfig()
+	if *path != "" {
+		loaded, err := proxy.LoadConfig(*path)
+		if err != nil {log.Fatalf("invalid configuration: %v",err)}
+		cfg = loaded
+	}
+	if *listen!="" {cfg.Listen=*listen}
+	s,err:=proxy.NewWithConfig(cfg)
+	if err!=nil {log.Fatalf("configuration rejected: %v",err)}
+	if *checkConfig {
+		fmt.Println("eproxy configuration valid")
+		return
+	}
+	if !isLoopbackAddr(cfg.Listen) {
+		fmt.Fprintln(os.Stderr,"eproxy only listens on loopback interfaces")
 		os.Exit(2)
 	}
-	ln, err := net.Listen("tcp", *addr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("eproxy listening on %s (HTTP CONNECT + SOCKS5)", ln.Addr())
-	log.Fatal(proxy.New(*timeout).Serve(ln))
+	ln,err:=net.Listen("tcp",cfg.Listen)
+	if err!=nil {log.Fatal(err)}
+	log.Printf("eproxy listening on %s (HTTP CONNECT and SOCKS5; configured routes)",ln.Addr())
+	log.Fatal(s.Serve(ln))
 }
-
-func isLoopback(host string) bool {
-	if strings.EqualFold(host, "localhost") {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+func isLoopbackAddr(addr string) bool {
+	host,_,err:=net.SplitHostPort(addr)
+	if err!=nil {return false}
+	if host=="localhost" {return true}
+	ip:=net.ParseIP(host)
+	return ip!=nil && ip.IsLoopback()
 }

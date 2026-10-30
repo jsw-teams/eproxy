@@ -1,0 +1,11 @@
+{
+  "listen": "127.0.0.1:1080",
+  "default_outbound": "direct",
+  "dial_timeout_seconds": 10,
+  "outbounds": {
+    "direct": {"type": "direct"}
+  },
+  "rules": [
+    {"domain_suffix": "example.invalid", "outbound": "block"}
+  ]
+}
