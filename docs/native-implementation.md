@@ -15,7 +15,7 @@ The original design borrows architecture concepts (typed outbounds, domain-based
 
 Hysteria2 needs HTTP/3 authentication and QUIC streams/datagrams, while REALITY and Shadowsocks-2022 need their respective audited crypto transports and extensive interoperability testing. These paths remain behind the **explicit** \`engine=singbox\` compatibility option in the current release. They are not mislabeled as native eproxy implementations.
 
-Native direct DNS queries are encrypted. The current HTTP/SOCKS/Trojan/VLESS/SS outbound server hostnames may still use system resolver for their *proxy server bootstrap*; no global DNS leak-free guarantee is made. TUN, router-wide DNS, firewall and NSS acceleration still require target-specific device tests.
+Native direct DNS queries are encrypted. The native HTTP/SOCKS/Trojan/VLESS/Shadowsocks *proxy server bootstrap* now also uses the verified DoH resolver instead of the system resolver. It remains necessary to test LAN device DNS interception, network failures and operating-system traffic from other applications independently before claiming that the whole router is DNS-leak-free. TUN, router-wide DNS, firewall and NSS acceleration still require target-specific device tests.
 
 The release gate is \`go test -race ./...\` plus OpenWrt SDK artifact compilation on both 24.10 (IPK) and 25.12 (APK); real-router safety is an independent gate.
 

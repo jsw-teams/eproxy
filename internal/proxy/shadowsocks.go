@@ -63,7 +63,7 @@ func stepNonce(n *[12]byte) {
 func dialShadowsocks(ctx context.Context,route Outbound,target string)(net.Conn,error) {
 	psk,err:=base64.StdEncoding.DecodeString(route.Password)
 	if err!=nil || len(psk)!=32 {return nil,errors.New("Shadowsocks AES-256-GCM requires a 32-byte base64 key")}
-	c,err:=(&net.Dialer{}).DialContext(ctx,"tcp",route.Address)
+	c,err:=dialUpstream(ctx,route.Address)
 	if err!=nil{return nil,err}
 	ok:=false
 	defer func(){if !ok {_=c.Close()}}()

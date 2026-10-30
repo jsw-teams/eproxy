@@ -143,3 +143,32 @@ func TestNativeTCPDirectActuallyUsesDoH(t *testing.T) {
     }
     if queries.Load()!=1 {t.Fatalf("expected one encrypted DNS query, got %d",queries.Load())}
 }
+
+func TestNativeProxyServerBootstrapUsesPinnedDoH(t *testing.T) {
+    upstream:=echoServer(t)
+    _,port,err:=net.SplitHostPort(upstream.Addr().String())
+    if err!=nil{t.Fatal(err)}
+    cfg:=DefaultConfig();cfg.DNSStrategy="ipv4_only"
+    resolver,err:=NewNativeResolver(cfg)
+    if err!=nil{t.Fatal(err)}
+    var count atomic.Int32
+    resolver.client=&http.Client{Transport:roundTripFunc(func(req *http.Request)(*http.Response,error){
+        count.Add(1)
+        wire,_:=io.ReadAll(req.Body)
+        return &http.Response{
+            StatusCode:200,
+            Header:http.Header{"Content-Type":[]string{"application/dns-message"}},
+            Body:io.NopCloser(bytes.NewReader(testDNSResponse(wire,netip.MustParseAddr("127.0.0.1")))),
+        },nil
+    })}
+    ctx:=context.WithValue(context.Background(),dohDialerContextKey{},resolver)
+    conn,err:=dialUpstream(ctx,net.JoinHostPort("proxy-bootstrap.example",port))
+    if err!=nil{t.Fatal(err)}
+    defer conn.Close()
+    _,_=conn.Write([]byte("upstream"))
+    got:=make([]byte,len("upstream"))
+    _,err=io.ReadFull(conn,got)
+    if err!=nil || string(got)!="upstream" || count.Load()!=1 {
+        t.Fatalf("upstream secure bootstrap %q %v; DoH calls %d",got,err,count.Load())
+    }
+}

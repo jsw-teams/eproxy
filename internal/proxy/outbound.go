@@ -36,6 +36,9 @@ func (s *Server) dialTarget(host, port string) (net.Conn,error) {
 	timeout:=s.config.Deadline()
 	ctx,cancel:=context.WithTimeout(context.Background(),timeout)
 	defer cancel()
+	// Pass the native DoH resolver down to upstream protocol dialers.
+	// This also encrypts proxy server hostname bootstrap, not only DIRECT.
+	if s.resolver!=nil { ctx=context.WithValue(ctx,dohDialerContextKey{},s.resolver) }
 	switch route.Type {
 	case "direct":
 		return s.dialDirect(ctx,host,port)
@@ -55,7 +58,7 @@ func (s *Server) dialTarget(host, port string) (net.Conn,error) {
 }
 
 func dialHTTP(ctx context.Context,route Outbound,target string)(net.Conn,error) {
-	c,err:=(&net.Dialer{}).DialContext(ctx,"tcp",route.Address)
+	c,err:=dialUpstream(ctx,route.Address)
 	if err!=nil{return nil,err}
 	ok:=false
 	defer func(){if !ok {_=c.Close()}}()
@@ -79,7 +82,7 @@ func dialHTTP(ctx context.Context,route Outbound,target string)(net.Conn,error) 
 }
 
 func dialSocks(ctx context.Context,route Outbound,target string)(net.Conn,error) {
-	c,err:=(&net.Dialer{}).DialContext(ctx,"tcp",route.Address)
+	c,err:=dialUpstream(ctx,route.Address)
 	if err!=nil{return nil,err}
 	ok:=false
 	defer func(){if !ok {_=c.Close()}}()
@@ -132,7 +135,7 @@ func dialTrojan(ctx context.Context,route Outbound,host,port string)(net.Conn,er
 		if !pool.AppendCertsFromPEM(pem) {return nil,errors.New("invalid Trojan CA certificate")}
 		tlsCfg.RootCAs=pool
 	}
-	raw,err:=(&net.Dialer{}).DialContext(ctx,"tcp",route.Address)
+	raw,err:=dialUpstream(ctx,route.Address)
 	if err!=nil{return nil,err}
 	c:=tls.Client(raw,tlsCfg)
 	ok:=false
@@ -183,6 +186,31 @@ func (s *Server) dialDirect(ctx context.Context,host,port string)(net.Conn,error
 	if err!=nil {return nil,err}
 	dialer:=&net.Dialer{Timeout:s.dialTimeout}
 	var last error
+	for _,ip:=range ips {
+		c,err:=dialer.DialContext(ctx,"tcp",net.JoinHostPort(ip.String(),port))
+		if err==nil{return c,nil}
+		last=err
+	}
+	return nil,last
+}
+
+
+// dohDialerContextKey is private so unrelated callers cannot override the
+// authenticated DNS resolver through an untyped context string.
+type dohDialerContextKey struct{}
+
+// dialUpstream resolves proxy node hostnames through the same pinned DoH as
+// direct destinations. When used in isolated protocol unit tests without an
+// eproxy instance, it retains the ordinary test dialer.
+func dialUpstream(ctx context.Context,address string)(net.Conn,error){
+	r,_:=ctx.Value(dohDialerContextKey{}).(*NativeResolver)
+	if r==nil{return (&net.Dialer{}).DialContext(ctx,"tcp",address)}
+	host,port,err:=net.SplitHostPort(address)
+	if err!=nil{return nil,err}
+	ips,err:=r.LookupIP(ctx,host)
+	if err!=nil{return nil,err}
+	var last error
+	dialer:=&net.Dialer{}
 	for _,ip:=range ips {
 		c,err:=dialer.DialContext(ctx,"tcp",net.JoinHostPort(ip.String(),port))
 		if err==nil{return c,nil}

@@ -37,7 +37,7 @@ func tlsClient(ctx context.Context,route Outbound)(*tls.Conn,error) {
 		if !pool.AppendCertsFromPEM(pem){return nil,errors.New("invalid CA PEM")}
 		cfg.RootCAs=pool
 	}
-	raw,err:=(&net.Dialer{}).DialContext(ctx,"tcp",route.Address)
+	raw,err:=dialUpstream(ctx,route.Address)
 	if err!=nil{return nil,err}
 	conn:=tls.Client(raw,cfg)
 	_ = conn.SetDeadline(time.Now().Add(10*time.Second))
