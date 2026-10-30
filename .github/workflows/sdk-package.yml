@@ -101,8 +101,18 @@ jobs:
           cd sdk
           make -j2 package/eproxy-core/compile package/luci-app-eproxy/compile V=s
           find bin/packages -name '*eproxy*.${{ matrix.extension }}' -print
-          test "$(find bin/packages -name 'eproxy-core_*.${{ matrix.extension }}' | wc -l)" -gt 0
-          test "$(find bin/packages -name 'luci-app-eproxy_*.${{ matrix.extension }}' | wc -l)" -gt 0
+          # Legacy opkg IPK uses underscores; modern APK filenames use hyphens.
+          case "${{ matrix.extension }}" in
+            ipk) SEP='_' ;;
+            apk) SEP='-' ;;
+            *) echo 'Unsupported package format'; exit 1 ;;
+          esac
+          for PKG in eproxy-core luci-app-eproxy; do
+            if ! find bin/packages -type f -name "${PKG}${SEP}*.${{ matrix.extension }}" -print -quit | grep -q .; then
+              echo "::error::Missing ${PKG} package with correct filename for ${{ matrix.extension }}"
+              exit 1
+            fi
+          done
       - name: Upload experimental installable packages
         uses: actions/upload-artifact@v4
         with:
