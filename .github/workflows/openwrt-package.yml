@@ -59,8 +59,13 @@ jobs:
           EOF
           cd openwrt
           make defconfig
-          grep -qx 'CONFIG_PACKAGE_eproxy-core=y' .config
-          grep -qx 'CONFIG_PACKAGE_luci-app-eproxy=y' .config
+          echo "=== requested package Kconfig values ==="
+          grep -E '(^CONFIG_PACKAGE_(eproxy-core|luci-app-eproxy)=|^# CONFIG_PACKAGE_(eproxy-core|luci-app-eproxy))' .config || true
+          echo "=== discovered eproxy package metadata ==="
+          grep -n -i 'eproxy' tmp/.config-package.in | head -35 || true
+          grep -n -i 'eproxy' tmp/.packageinfo | head -30 || true
+          grep -qx 'CONFIG_PACKAGE_eproxy-core=y' .config || { echo "::error::eproxy-core not selected by make defconfig"; exit 1; }
+          grep -qx 'CONFIG_PACKAGE_luci-app-eproxy=y' .config || { echo "::error::luci-app-eproxy not selected by make defconfig"; exit 1; }
       - name: Cross-compile toolchain and eproxy packages
         run: |
           cd openwrt
