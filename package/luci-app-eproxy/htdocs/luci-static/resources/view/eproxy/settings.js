@@ -40,6 +40,32 @@ return view.extend({
 			return running ? _('Running') : _('Stopped / unavailable');
 		};
 
+		o = s.option(form.ListValue, 'engine', _('Execution engine'));
+		o.value('native', _('eproxy native (basic protocols)'));
+		o.value('singbox', _('sing-box (Hysteria2 / REALITY / SS2022 / TUN / UDP)'));
+		o.default = 'native';
+		o.rmempty = false;
+
+		o = s.option(form.Flag, 'enable_tun', _('Transparent TUN on br-lan'));
+		o.default = o.disabled;
+		o.depends('engine', 'singbox');
+		o.description = _('Requires kmod-tun, nftables, and a validated sing-box binary. WAN is excluded.');
+
+		o = s.option(form.ListValue, 'dns_strategy', _('DNS / IPv6 policy'));
+		['prefer_ipv4', 'prefer_ipv6', 'ipv4_only', 'ipv6_only'].forEach(function(v) { o.value(v, v); });
+		o.default = 'prefer_ipv4';
+
+		o = s.option(form.Value, 'dns_remote', _('Upstream DNS server IP'));
+		o.default = '1.1.1.1';
+		o.datatype = 'ipaddr';
+		o.description = _('Proxy engine DNS resolver. Choose trusted IPv4 or IPv6 recursive server.');
+
+		o = s.option(form.Value, 'tun_interface', _('Managed LAN interface'));
+		o.depends('enable_tun', '1');
+		o.default = 'br-lan';
+		o.readonly = true;
+		o.description = _('Only br-lan is supported to avoid intercepting WAN and router management traffic.');
+
 		o = s.option(form.Flag, 'enabled', _('Enable eproxy'));
 		o.default = o.disabled;
 		o.rmempty = false;
@@ -84,17 +110,22 @@ return view.extend({
 		o.value('trojan', _('Trojan over verified TLS'));
 		o.value('vless', _('VLESS TCP over verified TLS'));
 		o.value('shadowsocks-aead', _('Shadowsocks AES-256-GCM (not 2022)'));
+		o.value('hysteria2', _('Hysteria2 (QUIC, sing-box engine)'));
+		o.value('vless-reality', _('VLESS REALITY (sing-box engine)'));
+		o.value('shadowsocks-2022', _('Shadowsocks-2022 (sing-box engine)'));
 		o.rmempty = false;
 		o.editable = true;
 
 		o = s.option(form.Value, 'address', _('Remote address (host:port)'));
-		['http', 'socks5', 'trojan', 'vless', 'shadowsocks-aead'].forEach(function(t) { o.depends('type', t); });
+		['http', 'socks5', 'trojan', 'vless', 'shadowsocks-aead', 'hysteria2', 'vless-reality', 'shadowsocks-2022'].forEach(function(t) { o.depends('type', t); });
 		o.placeholder = 'example.com:443';
 		o.modalonly = true;
 
 		o = s.option(form.Value, 'server_name', _('TLS server name (SNI)'));
 		o.depends('type', 'trojan');
 		o.depends('type', 'vless');
+		o.depends('type', 'vless-reality');
+		o.depends('type', 'hysteria2');
 		o.modalonly = true;
 
 		o = s.option(form.Value, 'username', _('Upstream username'));
@@ -104,12 +135,32 @@ return view.extend({
 
 		o = s.option(form.Value, 'password', _('Upstream secret / Shadowsocks base64 key'));
 		o.password = true;
-		['http', 'socks5', 'trojan', 'shadowsocks-aead'].forEach(function(t) { o.depends('type', t); });
+		['http', 'socks5', 'trojan', 'shadowsocks-aead', 'hysteria2', 'vless-reality', 'shadowsocks-2022'].forEach(function(t) { o.depends('type', t); });
 		o.modalonly = true;
 		o.description = _('Shadowsocks AES-256-GCM requires a base64-encoded 32-byte key. Plaintext proxy credentials are only accepted for loopback upstream servers.');
 
 		o = s.option(form.Value, 'uuid', _('VLESS UUID'));
 		o.depends('type', 'vless');
+		o.depends('type', 'vless-reality');
+		o.modalonly = true;
+
+		o = s.option(form.Value, 'method', _('Shadowsocks-2022 cipher'));
+		['2022-blake3-aes-128-gcm', '2022-blake3-aes-256-gcm', '2022-blake3-chacha20-poly1305'].forEach(function(v) {
+			o.value(v, v);
+		});
+		o.depends('type', 'shadowsocks-2022');
+		o.modalonly = true;
+
+		o = s.option(form.Value, 'reality_public_key', _('REALITY server public key'));
+		o.depends('type', 'vless-reality');
+		o.modalonly = true;
+		o = s.option(form.Value, 'reality_short_id', _('REALITY short ID'));
+		o.depends('type', 'vless-reality');
+		o.modalonly = true;
+
+		o = s.option(form.Value, 'obfs_password', _('Hysteria2 Salamander password (optional)'));
+		o.depends('type', 'hysteria2');
+		o.password = true;
 		o.modalonly = true;
 
 		o = s.option(form.Value, 'ca_file', _('Optional CA PEM path'));
@@ -136,6 +187,18 @@ return view.extend({
 		o.rmempty = false;
 		o.placeholder = 'direct';
 		o.description = _('Use a named outbound or "block". Rules apply only to destination names available to eproxy; no DNS interception is performed.');
+
+		s = m.section(form.GridSection, 'subscription', _('HTTPS subscriptions'),
+			_('Only HTTPS sing-box JSON outbound collections are accepted. Provider URLs and secrets remain private. ' +
+			  'Save & Apply reloads eproxy and refreshes the provider cache if sing-box is enabled.'));
+		s.anonymous = false;
+		s.addremove = true;
+		s.sortable = false;
+
+		o = s.option(form.Value, 'url', _('Provider HTTPS URL'));
+		o.rmempty = false;
+		o.placeholder = 'https://provider.example/nodes.json';
+		o.description = _('Must resolve to public IPs via HTTPS on port 443; redirects and local addresses are refused.');
 
 		return m.render();
 	}

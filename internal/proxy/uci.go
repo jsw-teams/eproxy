@@ -22,11 +22,16 @@ func LoadUCI(path string) (Config, error) {
 	scan.Buffer(make([]byte, 4096), 64*1024)
 	sectionType, name := "", ""
 	var rule Rule
+    var subscription Subscription
 	seen := make(map[string]bool)
 	foundMain := false
 	lineNo := 0
 	closeSection := func() error {
-		if sectionType == "rule" {
+		if sectionType == "subscription" {
+            if subscription.Name=="" || subscription.URL=="" {return errors.New("subscription needs URL and name")}
+            cfg.Subscriptions=append(cfg.Subscriptions,subscription)
+        }
+        if sectionType == "rule" {
 			if rule.DomainSuffix == "" || rule.Outbound == "" {
 				return errors.New("rule requires domain_suffix and outbound")
 			}
@@ -54,8 +59,11 @@ func LoadUCI(path string) (Config, error) {
 				if name == "" || name == "block" || strings.ContainsAny(name, " \t\r\n") { return fail("invalid outbound name") }
 				if _,exists := cfg.Outbounds[name]; exists { return fail("duplicate outbound section") }
 				cfg.Outbounds[name] = Outbound{}
-			case "rule":
-				if name != "" { return fail("rule sections must be anonymous") }
+			case "subscription":
+                if name=="" {return fail("subscription requires section name")}
+                subscription=Subscription{Name:name}
+            case "rule":
+                if name != "" { return fail("rule sections must be anonymous") }
 				rule = Rule{}
 			default: return fail("unknown section type " + sectionType)
 			}
@@ -69,7 +77,12 @@ func LoadUCI(path string) (Config, error) {
 			case "eproxy":
 				switch key {
 				case "enabled": if value != "0" && value != "1" { return fail("invalid enabled flag") }
-				case "listen": cfg.Listen = value
+				case "engine": cfg.Engine=value
+                case "enable_tun": if value!="0" && value!="1" {return fail("invalid enable_tun flag")};cfg.EnableTUN=value=="1"
+                case "dns_strategy": cfg.DNSStrategy=value
+                case "dns_remote": cfg.DNSRemote=value
+                case "tun_interface": cfg.TUNInterface=value
+                case "listen": cfg.Listen = value
 				case "username": cfg.Username = value
 				case "password": cfg.Password = value
 				case "default_outbound": cfg.DefaultOutbound = value
@@ -80,7 +93,11 @@ func LoadUCI(path string) (Config, error) {
 			case "outbound":
 				ob := cfg.Outbounds[name]
 				switch key {
-				case "type": ob.Type = value
+				case "method": ob.Method=value
+                case "reality_public_key":ob.RealityPublicKey=value
+                case "reality_short_id":ob.RealityShortID=value
+                case "obfs_password":ob.ObfsPassword=value
+                case "type": ob.Type = value
 				case "address": ob.Address = value
 				case "username": ob.Username = value
 				case "password": ob.Password = value
@@ -90,8 +107,13 @@ func LoadUCI(path string) (Config, error) {
 				default: return fail("unsupported outbound option " + key)
 				}
 				cfg.Outbounds[name] = ob
-			case "rule":
-				switch key {
+			case "subscription":
+                switch key {
+                case "url":subscription.URL=value
+                default:return fail("unsupported subscription option "+key)
+                }
+            case "rule":
+                switch key {
 				case "domain_suffix": rule.DomainSuffix = value
 				case "outbound": rule.Outbound = value
 				default: return fail("unsupported rule option " + key)

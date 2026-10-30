@@ -5,21 +5,62 @@ START=93
 STOP=15
 
 start_service() {
-	local enabled
+	local enabled engine tun
 	config_load eproxy
 	config_get_bool enabled main enabled 0
 	[ "$enabled" -eq 1 ] || return 0
-	[ -x /usr/bin/eproxy ] || { logger -t eproxy "binary not installed"; return 1; }
-	# Same UCI data is consumed by the LuCI form and the daemon.
-	# Never interpolate untrusted credentials into a shell command.
-	# UCI writes by LuCI can replace the file; enforce root-only secrets.
+	config_get engine main engine native
+	config_get_bool tun main enable_tun 0
+	[ -x /usr/bin/eproxy ] || return 1
+
+	# Prevent UCI/LuCI writes from exposing credentials.
 	chmod 0600 /etc/config/eproxy || return 1
 	/usr/bin/eproxy -uci /etc/config/eproxy -check-config || {
-		logger -t eproxy "invalid UCI config; refusing to start"
+		logger -t eproxy "invalid eproxy UCI config"
 		return 1
 	}
-	procd_open_instance
-	procd_set_param command /usr/bin/eproxy -uci /etc/config/eproxy
+
+	case "$engine" in
+		native)
+			procd_open_instance
+			procd_set_param command /usr/bin/eproxy -uci /etc/config/eproxy
+			;;
+		singbox)
+			[ -x /usr/bin/sing-box ] || {
+				logger -t eproxy "sing-box is not installed; install matching OpenWrt package"
+				return 1
+			}
+			if [ "$tun" = 1 ]; then
+				[ -c /dev/net/tun ] && command -v nft >/dev/null 2>&1 && ip link show br-lan >/dev/null 2>&1 || {
+					logger -t eproxy "TUN requires /dev/net/tun, nftables and br-lan"
+					return 1
+				}
+			fi
+			# Fetch strictly HTTPS subscription nodes; use last verified cache if offline.
+			mkdir -p /etc/eproxy || return 1
+			chmod 0700 /etc/eproxy
+			if ! /usr/bin/eproxy -uci /etc/config/eproxy -sync-subscriptions /etc/eproxy/providers.json; then
+				logger -t eproxy "provider refresh failed; retaining last validated cache"
+				[ -f /etc/eproxy/providers.json ] || return 1
+			fi
+			mkdir -p /var/run/eproxy || return 1
+			chmod 0700 /var/run/eproxy
+			/usr/bin/eproxy -uci /etc/config/eproxy \
+				-provider-cache /etc/eproxy/providers.json \
+				-export-singbox /var/run/eproxy/singbox.json || return 1
+			/usr/bin/sing-box check -c /var/run/eproxy/singbox.json || {
+				logger -t eproxy "sing-box configuration failed validation; not starting"
+				return 1
+			}
+			procd_open_instance
+			procd_set_param command /usr/bin/sing-box run -c /var/run/eproxy/singbox.json
+			;;
+		*)
+			logger -t eproxy "invalid engine: $engine"
+			return 1
+			;;
+	esac
+
 	procd_set_param respawn 3600 5 5
 	procd_set_param file /etc/config/eproxy
 	procd_set_param limits core="0"

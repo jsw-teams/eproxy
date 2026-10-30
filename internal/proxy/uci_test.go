@@ -108,12 +108,12 @@ func TestUIProtocolParity(t *testing.T) {
 	data, err := os.ReadFile(viewPath)
 	if err != nil { t.Fatal(err) }
 	ui := string(data)
-	for _, protocol := range []string{"direct", "http", "socks5", "trojan", "vless", "shadowsocks-aead"} {
+	for _, protocol := range []string{"direct", "http", "socks5", "trojan", "vless", "shadowsocks-aead", "hysteria2", "vless-reality", "shadowsocks-2022"} {
 		if !strings.Contains(ui, "o.value('"+protocol+"'") {
 			t.Errorf("UI does not offer compiled core protocol %q", protocol)
 		}
 	}
-	for _, unsupported := range []string{"hysteria2", "shadowsocks-2022", "vless-reality"} {
+	for _, unsupported := range []string{"tuic", "shadowsocks-2022-udp-native", "vless-reality-native"} {
 		if strings.Contains(ui, "o.value('"+unsupported+"'") {
 			t.Errorf("UI improperly offers unimplemented protocol %q", unsupported)
 		}

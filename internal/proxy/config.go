@@ -10,9 +10,16 @@ import (
 	"os"
 	"strings"
 	"time"
+    "net/url"
 )
 
 type Config struct {
+    Engine string `json:"engine,omitempty"`
+    EnableTUN bool `json:"enable_tun,omitempty"`
+    DNSStrategy string `json:"dns_strategy,omitempty"`
+    DNSRemote string `json:"dns_remote,omitempty"`
+    TUNInterface string `json:"tun_interface,omitempty"`
+    Subscriptions []Subscription `json:"subscriptions,omitempty"`
 	Listen string `json:"listen"`
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
@@ -21,7 +28,15 @@ type Config struct {
 	Rules []Rule `json:"rules,omitempty"`
 	DialTimeoutSeconds int `json:"dial_timeout_seconds,omitempty"`
 }
+type Subscription struct {
+    Name string `json:"name"`
+    URL string `json:"url"`
+}
 type Outbound struct {
+    Method string `json:"method,omitempty"`
+    RealityPublicKey string `json:"reality_public_key,omitempty"`
+    RealityShortID string `json:"reality_short_id,omitempty"`
+    ObfsPassword string `json:"obfs_password,omitempty"`
 	Type string `json:"type"` // direct, http, socks5, trojan, shadowsocks-aead, vless
 	Address string `json:"address,omitempty"`
 	Username string `json:"username,omitempty"`
@@ -37,7 +52,10 @@ type Rule struct {
 
 func DefaultConfig() Config {
 	return Config{
-		Listen: "127.0.0.1:1080",
+		Engine: "native",
+        DNSStrategy:"prefer_ipv4",
+        DNSRemote:"1.1.1.1",
+        Listen: "127.0.0.1:1080",
 		DefaultOutbound: "direct",
 		Outbounds: map[string]Outbound{"direct": {Type:"direct"}},
 		DialTimeoutSeconds: 10,
@@ -80,6 +98,7 @@ func validRemote(addr string) bool {
 	return err==nil && port>0 && port<65536
 }
 func (c Config) hasSecrets()bool {
+    if len(c.Subscriptions)>0 {return true}
 	if c.Username!="" || c.Password!="" {return true}
 	for _,ob:=range c.Outbounds {
 		if ob.Password!="" || ob.Username!="" || ob.UUID!="" {return true}
@@ -88,6 +107,32 @@ func (c Config) hasSecrets()bool {
 }
 
 func (c *Config) Validate() error {
+    if c.Engine=="" {c.Engine="native"}
+    if c.Engine!="native" && c.Engine!="singbox" {return errors.New("engine must be native or singbox")}
+    if c.DNSStrategy=="" {c.DNSStrategy="prefer_ipv4"}
+    switch c.DNSStrategy {
+    case "prefer_ipv4","prefer_ipv6","ipv4_only","ipv6_only":
+    default:return errors.New("invalid DNS/IPv6 strategy")
+    }
+    if c.DNSRemote=="" {c.DNSRemote="1.1.1.1"}
+    if ip:=net.ParseIP(c.DNSRemote);ip==nil || !ip.IsGlobalUnicast() {
+        return errors.New("dns_remote must be a public IP address")
+    }
+    if c.EnableTUN {
+        if c.Engine!="singbox" {return errors.New("TUN requires singbox engine")}
+        if c.TUNInterface=="" {c.TUNInterface="br-lan"}
+        if c.TUNInterface!="br-lan" {return errors.New("TUN may only intercept br-lan")
+        }
+    }
+    if len(c.Subscriptions)>12 {return errors.New("too many subscriptions")}
+    for _,subscription:=range c.Subscriptions {
+        if subscription.Name=="" || subscription.URL=="" {return errors.New("subscription requires name and HTTPS URL")}
+        u,err:=url.Parse(subscription.URL)
+        if err!=nil || u.Scheme!="https" || u.Hostname()=="" || u.User!=nil || u.Fragment!="" {
+            return errors.New("subscription must be a credential-free HTTPS URL")
+        }
+    }
+
 	if !loopbackAddr(c.Listen) {return errors.New("listener must be an explicit loopback TCP host:port")}
 	if (c.Username=="")!=(c.Password=="") {return errors.New("listener username and password must both be set or neither")}
 	if c.DialTimeoutSeconds==0 {c.DialTimeoutSeconds=10}
@@ -114,7 +159,24 @@ func (c *Config) Validate() error {
 		case "vless":
 			_,err:=parseUUID(ob.UUID)
 			if !validRemote(ob.Address) || ob.ServerName=="" || err!=nil {return fmt.Errorf("%s: VLESS requires address, UUID and TLS server_name",name)}
-		default:
+		case "hysteria2":
+            if c.Engine!="singbox" || !validRemote(ob.Address) || ob.Password=="" || ob.ServerName=="" {
+                return fmt.Errorf("%s: hysteria2 needs singbox, address, password and TLS SNI",name)
+            }
+        case "vless-reality":
+            _,err:=parseUUID(ob.UUID)
+            if c.Engine!="singbox" || !validRemote(ob.Address) || ob.ServerName=="" || ob.RealityPublicKey=="" || err!=nil {
+                return fmt.Errorf("%s: REALITY needs singbox, UUID, public key and server",name)
+            }
+        case "shadowsocks-2022":
+            if c.Engine!="singbox" || !validRemote(ob.Address) || ob.Password=="" {
+                return fmt.Errorf("%s: SS2022 needs singbox, address and password",name)
+            }
+            switch ob.Method {
+            case "2022-blake3-aes-128-gcm","2022-blake3-aes-256-gcm","2022-blake3-chacha20-poly1305":
+            default:return fmt.Errorf("%s: invalid SS2022 method",name)
+            }
+        default:
 			return fmt.Errorf("%s: unsupported outbound type %q",name,ob.Type)
 		}
 	}

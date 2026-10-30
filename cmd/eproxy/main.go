@@ -15,6 +15,10 @@ func main() {
 	uci := flag.String("uci", "", "read OpenWrt UCI config directly; mutually exclusive with -config")
 	listen := flag.String("listen", "", "override config listener; loopback-only")
 	checkConfig := flag.Bool("check-config", false, "validate config without opening a network listener")
+	export := flag.String("export-singbox", "", "generate private sing-box configuration and exit")
+    providerCache:=flag.String("provider-cache", "", "private cached subscription nodes JSON")
+    syncSubscriptions:=flag.String("sync-subscriptions", "", "download HTTPS subscriptions into a private provider cache")
+
 	flag.Parse()
 
 	if *path != "" && *uci != "" {
@@ -33,10 +37,23 @@ func main() {
 	if *listen!="" {cfg.Listen=*listen}
 	s,err:=proxy.NewWithConfig(cfg)
 	if err!=nil {log.Fatalf("configuration rejected: %v",err)}
+    if *syncSubscriptions!="" {
+        if err:=proxy.SyncSubscriptions(cfg,*syncSubscriptions);err!=nil{log.Fatalf("subscription update rejected: %v",err)}
+        fmt.Println("eproxy subscription cache updated")
+        return
+    }
+	if *export!="" {
+        if err:=proxy.WriteSingBoxConfig(*export,cfg,*providerCache);err!=nil {log.Fatalf("sing-box export rejected: %v",err)}
+        fmt.Println("eproxy sing-box config exported")
+        return
+    }
 	if *checkConfig {
 		fmt.Println("eproxy configuration valid")
 		return
 	}
+    if cfg.Engine=="singbox" {
+        log.Fatal("engine singbox must be launched through OpenWrt procd after export and sing-box check; native mode cannot implement QUIC")
+    }
 	if !isLoopbackAddr(cfg.Listen) {
 		fmt.Fprintln(os.Stderr,"eproxy only listens on loopback interfaces")
 		os.Exit(2)

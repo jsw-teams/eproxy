@@ -80,7 +80,7 @@ assert.ok(luciView && typeof luciView.load==='function');
     assert.ok(ids(general).has(field), 'general control missing: '+field);
   const status = general.options.find(o=>o.id==='_status');
   assert.equal(status.cfgvalue(),'Running');
-  const supported = ['direct','http','socks5','trojan','vless','shadowsocks-aead'];
+  const supported = ['direct','http','socks5','trojan','vless','shadowsocks-aead','hysteria2','vless-reality','shadowsocks-2022'];
   const protocol = outbounds.options.find(o=>o.id==='type');
   assert.deepEqual(protocol.values,supported,'view and Go parser supported protocol sets must stay in sync');
   for(const field of ['type','address','username','password','server_name','ca_file','uuid'])
