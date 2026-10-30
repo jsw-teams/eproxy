@@ -25,6 +25,12 @@ jobs:
         run: |
           node --check package/luci-app-eproxy/htdocs/luci-static/resources/view/eproxy/settings.js
           node tests/luci_ui.test.js
+      - name: Real OpenWrt UCI CLI and procd script smoke
+        run: |
+          go run ./cmd/eproxy -uci package/eproxy-core/files/eproxy.config -check-config
+          go run ./cmd/eproxy -config examples/direct.json -check-config
+          sh -n package/eproxy-core/files/eproxy.init
+          python3 -m json.tool package/luci-app-eproxy/root/usr/share/rpcd/acl.d/luci-app-eproxy.json > /dev/null
       - name: Linux arm64 cross compile
         run: |
           mkdir -p dist
