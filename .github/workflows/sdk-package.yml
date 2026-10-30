@@ -25,10 +25,12 @@ jobs:
             gcc: '13.3.0'
             sha256: '1a2aa6b3c54ee2cd07c2552a34abb5cb15fe6ca596b76007849a68361b0985b5'
             extension: 'ipk'
+            openwrt_commit: '0b795ce79e23b553aa184080c390f9ce92a2b6d4'
           - version: '25.12.6'
             gcc: '14.3.0'
             sha256: '4ce05fafa54286032e3e2de80806256965812507b6abdf7c7e7a615bdf5dc94f'
             extension: 'apk'
+            openwrt_commit: '64900e756efa667774214f9c6b17c113222e01f7'
     steps:
       - uses: actions/checkout@v4
       - name: Install SDK requirements
@@ -54,12 +56,25 @@ jobs:
           grep -E '^src-git (packages|luci) ' feeds.buildinfo > sdk/feeds.conf
           test "$(wc -l < sdk/feeds.conf)" = 2
           cat sdk/feeds.conf
-      - name: Minimal Go and LuCI feeds
+      - name: Match base libraries to official OpenWrt SDK release
+        env:
+          VERSION: ${{ matrix.version }}
+          OPENWRT_COMMIT: ${{ matrix.openwrt_commit }}
+        run: |
+          git clone --depth 1 --filter=blob:none --branch "v$VERSION" https://github.com/openwrt/openwrt.git openwrt-base
+          test "$(git -C openwrt-base rev-parse HEAD)" = "$OPENWRT_COMMIT"
+          test -f openwrt-base/package/utils/lua/Makefile
+          test -f openwrt-base/package/utils/ucode/Makefile
+          echo "src-link base $GITHUB_WORKSPACE/openwrt-base/package" >> sdk/feeds.conf
+      - name: Install Go, LuCI and base development packages
         run: |
           cd sdk
-          ./scripts/feeds update packages luci
+          ./scripts/feeds update base packages luci
+          ./scripts/feeds install -p base lua ucode
           ./scripts/feeds install -p packages golang
           ./scripts/feeds install -p luci luci-base
+          test -f package/feeds/base/lua/Makefile
+          test -f package/feeds/base/ucode/Makefile
       - name: Copy sources into package buildroot
         run: |
           cp -R package/eproxy-core sdk/package/eproxy-core
@@ -70,11 +85,17 @@ jobs:
       - name: Verify eproxy Kconfig selection
         run: |
           cd sdk
-          printf '\nCONFIG_PACKAGE_eproxy-core=m\nCONFIG_PACKAGE_luci-app-eproxy=m\n' >> .config
+          printf '\nCONFIG_PACKAGE_eproxy-core=m\nCONFIG_PACKAGE_luci-app-eproxy=m\nCONFIG_PACKAGE_liblua=m\nCONFIG_PACKAGE_libucode=m\n' >> .config
           make defconfig
           grep -E '^CONFIG_PACKAGE_(eproxy-core|luci-app-eproxy)=' .config
           grep -Eq '^CONFIG_PACKAGE_eproxy-core=[my]$' .config
           grep -Eq '^CONFIG_PACKAGE_luci-app-eproxy=[my]$' .config
+      - name: Compile SDK-omitted LuCI Lua/ucode development headers
+        run: |
+          cd sdk
+          make -j2 package/feeds/base/lua/compile package/feeds/base/ucode/compile V=s
+          sh -c 'test -f staging_dir/target-*/usr/include/lua.h'
+          sh -c 'test -f staging_dir/target-*/usr/include/ucode/module.h'
       - name: Compile OpenWrt packages
         run: |
           cd sdk
