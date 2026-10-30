@@ -1,0 +1,7 @@
+{
+  "luci-app-eproxy": {
+    "description": "eproxy UCI settings",
+    "read": {"uci": ["eproxy"]},
+    "write": {"uci": ["eproxy"]}
+  }
+}

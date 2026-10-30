@@ -1,0 +1,81 @@
+name: OpenWrt official arm64 package build
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/openwrt-package.yml'
+      - 'package/**'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'go.mod'
+  pull_request:
+    paths:
+      - '.github/workflows/openwrt-package.yml'
+      - 'package/**'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'go.mod'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install OpenWrt dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib gettext git libncurses-dev libssl-dev python3 python3-setuptools rsync unzip zlib1g-dev file wget curl ca-certificates
+      - name: Clone pinned official OpenWrt 25.12.6
+        run: |
+          git clone --filter=blob:none https://github.com/openwrt/openwrt.git openwrt
+          git -C openwrt checkout 64900e756efa667774214f9c6b17c113222e01f7
+          test "$(git -C openwrt rev-parse HEAD)" = "64900e756efa667774214f9c6b17c113222e01f7"
+      - name: Install official package and LuCI feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update packages luci
+          ./scripts/feeds install -a -p packages
+          ./scripts/feeds install -a -p luci
+      - name: Place eproxy OpenWrt packages and local source
+        run: |
+          cp -R package/eproxy-core openwrt/package/eproxy-core
+          cp -R package/luci-app-eproxy openwrt/package/luci-app-eproxy
+          mkdir -p openwrt/package/eproxy-core/src
+          cp go.mod openwrt/package/eproxy-core/src/
+          cp -R cmd internal openwrt/package/eproxy-core/src/
+          cp LICENSE openwrt/package/eproxy-core/src/
+      - name: Configure qualcommax arm64 package build
+        run: |
+          cat > openwrt/.config <<'EOF'
+          CONFIG_TARGET_qualcommax=y
+          CONFIG_TARGET_qualcommax_ipq807x=y
+          CONFIG_TARGET_qualcommax_ipq807x_DEVICE_aliyun_ap8220=y
+          CONFIG_PACKAGE_eproxy-core=y
+          CONFIG_PACKAGE_luci-app-eproxy=y
+          EOF
+          cd openwrt
+          make defconfig
+          grep -qx 'CONFIG_PACKAGE_eproxy-core=y' .config
+          grep -qx 'CONFIG_PACKAGE_luci-app-eproxy=y' .config
+      - name: Cross-compile toolchain and eproxy packages
+        run: |
+          cd openwrt
+          make -j2 tools/install toolchain/install V=s
+          make -j2 package/eproxy-core/compile package/luci-app-eproxy/compile V=s
+          make -j2 package/index V=s
+      - name: Check generated APK packages
+        run: |
+          find openwrt/bin/packages -type f \( -name 'eproxy-core_*.apk' -o -name 'luci-app-eproxy_*.apk' \) -print
+          test "$(find openwrt/bin/packages -name 'eproxy-core_*.apk' | wc -l)" -gt 0
+          test "$(find openwrt/bin/packages -name 'luci-app-eproxy_*.apk' | wc -l)" -gt 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eproxy-openwrt-ipq807x-EXPERIMENTAL-APK
+          path: |
+            openwrt/bin/packages/**/eproxy-core_*.apk
+            openwrt/bin/packages/**/luci-app-eproxy_*.apk
+          retention-days: 7
