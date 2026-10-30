@@ -122,6 +122,7 @@ func singBoxOutbound(tag string,o Outbound)(map[string]interface{},error) {
 			tls["reality"]=map[string]interface{}{
 				"enabled":true,"public_key":o.RealityPublicKey,"short_id":o.RealityShortID,
 			}
+			tls["utls"]=map[string]interface{}{"enabled":true,"fingerprint":"chrome"}
 		}
 		out["tls"]=tls
 	case "hysteria2":

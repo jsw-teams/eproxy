@@ -183,12 +183,12 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("%s: unsupported outbound type %q",name,ob.Type)
 		}
 	}
-	if _,ok:=c.Outbounds[c.DefaultOutbound];!ok{return fmt.Errorf("default outbound %q missing",c.DefaultOutbound)}
+	if _,ok:=c.Outbounds[c.DefaultOutbound];!ok && !c.hasProviderRoute(c.DefaultOutbound){return fmt.Errorf("default outbound %q missing",c.DefaultOutbound)}
 	if len(c.Rules)>128 {return errors.New("too many routing rules")}
 	for _,r:=range c.Rules {
 		if r.DomainSuffix=="" || strings.ContainsAny(r.DomainSuffix," /:\t\r\n") {return fmt.Errorf("invalid domain suffix %q",r.DomainSuffix)}
 		if r.Outbound!="block" {
-			if _,ok:=c.Outbounds[r.Outbound];!ok {return fmt.Errorf("route outbound %q missing",r.Outbound)}
+			if _,ok:=c.Outbounds[r.Outbound];!ok && !c.hasProviderRoute(r.Outbound) {return fmt.Errorf("route outbound %q missing",r.Outbound)}
 		}
 	}
 	return nil
@@ -204,4 +204,17 @@ func (c Config) OutboundFor(host string) (Outbound,bool) {
 		}
 	}
 	return c.Outbounds[c.DefaultOutbound],false
+}
+
+func (c Config) hasProviderRoute(name string) bool {
+	if c.Engine != "singbox" {
+		return false
+	}
+	for _, sub := range c.Subscriptions {
+		prefix := "sub_" + sub.Name + "_"
+		if strings.HasPrefix(name, prefix) && len(name) > len(prefix) {
+			return true
+		}
+	}
+	return false
 }

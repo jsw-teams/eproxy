@@ -2,6 +2,8 @@ package proxy
 
 import (
  "context"
+ "encoding/base64"
+ "strconv"
  "encoding/json"
  "errors"
  "fmt"
@@ -90,7 +92,7 @@ func SyncSubscriptions(cfg Config, dest string) error {
   resp.Body.Close()
   if err!=nil{return err}
   if len(limited)>1024*1024{return errors.New("subscription exceeds 1 MiB")}
-  nodes,err:=validateProvider(subscription.Name,limited)
+  nodes,err:=parseSubscription(subscription.Name,limited)
   if err!=nil{return fmt.Errorf("invalid provider %s: %w",subscription.Name,err)}
   all=append(all,nodes...)
  }
@@ -110,4 +112,88 @@ func ReadProviders(path string)(ProviderSnapshot,error) {
   if !strings.HasPrefix(tag,"sub_")|| !providerTag.MatchString(tag) {return p,errors.New("invalid cached provider tag")}
  }
  return p,nil
+}
+
+func parseSubscription(name string, body []byte)([]map[string]interface{},error){
+ trimmed:=strings.TrimSpace(string(body))
+ if strings.HasPrefix(trimmed,"{") {
+  return validateProvider(name,body)
+ }
+ if strings.Index(trimmed,"://")<0 {
+  decoded,err:=base64.StdEncoding.DecodeString(strings.Join(strings.Fields(trimmed),""))
+  if err!=nil {
+   decoded,err=base64.RawStdEncoding.DecodeString(strings.Join(strings.Fields(trimmed),""))
+   if err!=nil {return nil,errors.New("provider is neither JSON nor valid base64 URI list")}
+  }
+  trimmed=string(decoded)
+ }
+ lines:=strings.Split(strings.ReplaceAll(trimmed,"\r",""),"\n")
+ nodes:=make([]map[string]interface{},0)
+ for i,line:=range lines {
+  line=strings.TrimSpace(line)
+  if line=="" || strings.HasPrefix(line,"#") {continue}
+  if len(nodes)>=128{return nil,errors.New("too many URI nodes")}
+  node,err:=parseNodeURI(line,i)
+  if err!=nil{return nil,fmt.Errorf("provider %s node %d: %w",name,i+1,err)}
+  node["tag"]="sub_"+name+"_"+node["tag"].(string)
+  nodes=append(nodes,node)
+ }
+ if len(nodes)==0 {return nil,errors.New("subscription contained no supported nodes")}
+ return nodes,nil
+}
+func parseNodeURI(line string,index int)(map[string]interface{},error){
+ u,err:=url.Parse(line)
+ if err!=nil || u.User==nil || u.Hostname()=="" || u.Port()=="" {return nil,errors.New("invalid node URI")}
+ tag:=u.Fragment
+ if tag==""{tag=fmt.Sprintf("node%d",index+1)}
+ var b strings.Builder
+ for _,r:=range tag {
+  if (r>='A'&&r<='Z')||(r>='a'&&r<='z')||(r>='0'&&r<='9')||r=='-'||r=='_' {b.WriteRune(r)}else{b.WriteRune('_')}
+ }
+ tag=b.String()
+ if len(tag)>48 {tag=tag[:48]}
+ if !providerTag.MatchString(tag){return nil,errors.New("invalid node tag")}
+ port,err:=strconv.Atoi(u.Port())
+ if err!=nil || port<=0 || port>65535{return nil,errors.New("invalid node port")}
+ node:=map[string]interface{}{"tag":tag,"server":u.Hostname(),"server_port":port}
+ sni:=u.Query().Get("sni")
+ if sni==""{sni=u.Hostname()}
+ if u.Query().Get("allowInsecure")=="1" || u.Query().Get("insecure")=="true" {
+  return nil,errors.New("insecure TLS settings are forbidden")
+ }
+ tls:=map[string]interface{}{"enabled":true,"server_name":sni}
+ switch u.Scheme {
+ case "trojan":
+  node["type"]="trojan";node["password"]=u.User.Username();node["tls"]=tls
+ case "vless":
+  node["type"]="vless";node["uuid"]=u.User.Username();node["tls"]=tls
+  if u.Query().Get("security")=="reality" {
+   pub:=u.Query().Get("pbk")
+   if pub==""{return nil,errors.New("REALITY public key missing")}
+   tls["reality"]=map[string]interface{}{"enabled":true,"public_key":pub,"short_id":u.Query().Get("sid")}
+   tls["utls"]=map[string]interface{}{"enabled":true,"fingerprint":"chrome"}
+  }else if v:=u.Query().Get("security");v!=""&&v!="tls" {
+   return nil,errors.New("unsupported VLESS security")
+  }
+ case "hysteria2","hy2":
+  node["type"]="hysteria2";node["password"]=u.User.Username();node["tls"]=tls
+  if u.Query().Get("obfs")=="salamander" {
+   node["obfs"]=map[string]interface{}{"type":"salamander","password":u.Query().Get("obfs-password")}
+  }
+ case "ss":
+  node["type"]="shadowsocks"
+  user:=u.User.Username()
+  pass,ok:=u.User.Password()
+  if !ok {
+   pair,err:=base64.RawURLEncoding.DecodeString(user)
+   if err!=nil {pair,err=base64.StdEncoding.DecodeString(user);if err!=nil{return nil,errors.New("invalid Shadowsocks userinfo")}}
+   parts:=strings.SplitN(string(pair),":",2)
+   if len(parts)!=2{return nil,errors.New("invalid Shadowsocks method/key")}
+   user,pass=parts[0],parts[1]
+  }
+  node["method"]=user;node["password"]=pass
+ default: return nil,errors.New("unsupported node URI protocol")
+ }
+ if u.User.Username()==""{return nil,errors.New("missing node credential")}
+ return node,nil
 }

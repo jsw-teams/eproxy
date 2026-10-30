@@ -195,7 +195,7 @@ return view.extend({
 
 		s = m.section(form.GridSection, 'subscription', _('HTTPS subscriptions'),
 			_('Only HTTPS sing-box JSON outbound collections are accepted. Provider URLs and secrets remain private. ' +
-			  'Save & Apply reloads eproxy and refreshes the provider cache if sing-box is enabled.'));
+			  'Save & Apply reloads eproxy and refreshes provider cache. JSON outbounds, share URI lists and base64 URI lists are accepted; node names become sub_PROVIDER_NODE.'));
 		s.anonymous = false;
 		s.addremove = true;
 		s.sortable = false;
