@@ -31,3 +31,17 @@ OpenWrt package recipe is in `package/eproxy/Makefile`. It uses the OpenWrt feed
 CI's OpenWrt cross-build is a compile/package test, **not a complete router firmware image**. Kernel NSS integration and full firmware build belong to [openwrt-cpe-s10-sky](https://github.com/jsw-teams/openwrt-cpe-s10-sky) and must pass additional hardware validation.
 
 Public repository contains no device backup, ART, secrets, subscription URLs or personal configuration.
+
+## Integration as a normal OpenWrt feed
+
+In an authorized OpenWrt buildroot, configure the eproxy repository as its own feed:
+
+```sh
+echo 'src-git eproxy https://github.com/jsw-teams/eproxy.git' >> feeds.conf.default
+./scripts/feeds update eproxy
+# Pin feeds/eproxy to a reviewed commit before releasing any firmware.
+./scripts/feeds install -p eproxy eproxy-core luci-app-eproxy
+make defconfig
+```
+
+The eproxy package supports both the `src-git` feed source layout and CI-local source copying. These Go/LuCI packages are currently experimental and do not implement secure remote tunneling.

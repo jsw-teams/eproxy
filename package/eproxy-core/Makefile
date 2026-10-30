@@ -26,9 +26,16 @@ define Package/eproxy-core/conffiles
 /etc/config/eproxy
 endef
 
+# Support both a standard OpenWrt src-link/src-git feed checkout and a
+# CI-local package copy containing ./src/. Never download unpinned build code.
+EPROXY_SOURCE_DIR:=$(if $(wildcard $(CURDIR)/src/go.mod),$(CURDIR)/src,$(abspath $(realpath $(CURDIR))/../..))
+
 define Build/Prepare
+	test -f $(EPROXY_SOURCE_DIR)/go.mod
 	mkdir -p $(PKG_BUILD_DIR)
-	$(CP) ./src/. $(PKG_BUILD_DIR)/
+	$(CP) $(EPROXY_SOURCE_DIR)/go.mod $(PKG_BUILD_DIR)/
+	$(CP) $(EPROXY_SOURCE_DIR)/cmd $(EPROXY_SOURCE_DIR)/internal $(PKG_BUILD_DIR)/
+	$(CP) $(EPROXY_SOURCE_DIR)/LICENSE $(PKG_BUILD_DIR)/
 endef
 
 define Package/eproxy-core/install
