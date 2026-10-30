@@ -4,7 +4,7 @@ The daemon reads a private JSON file by `-config /etc/eproxy/config.json`. Its l
 
 **Implemented (TCP)**: inbound HTTP CONNECT and SOCKS5 CONNECT with optional local username/password; outbound direct, HTTP CONNECT (credentials only to loopback), SOCKS5, TLS Trojan, TLS VLESS (TCP, standard UUID authentication), and legacy Shadowsocks AEAD AES-256-GCM (SIP004, *not* Shadowsocks-2022). Domain suffix routing and block rules are supported, evaluated in JSON order. All encrypted outbounds require their specified key and verified TLS certificate (no TLS skip verify).
 
-**Not implemented**: Hysteria2/QUIC, VLESS REALITY/XTLS, Shadowsocks-2022, TUIC, WireGuard, WebSocket/gRPC, UDP relays, TUN/tproxy/nftables interception, remote subscription management, provider updates, rule providers, graphical secret editor and OpenClash profile migration.
+**Not implemented**: Hysteria2/QUIC, VLESS REALITY/XTLS, Shadowsocks-2022, TUIC, WireGuard, WebSocket/gRPC, encrypted outbound UDP relays, TUN/tproxy/nftables interception, remote subscription management, provider updates, rule providers, graphical secret editor and OpenClash profile migration.
 
 Example direct-only config is `examples/direct.json`. Replace the outbound with your own private server settings for a real TLS proxy (do **not** commit passwords, UUIDs, server names, subscription tokens or CA private keys). Place config in `/etc/eproxy/config.json`, owner root and mode 0600, and enable the service in LuCI or via UCI. If disabled, no port opens.
 
@@ -42,3 +42,7 @@ go run ./cmd/eproxy -config examples/direct.json -check-config
 ```
 
 Important: the built-in loopback proxy is **not** transparent routing, and thus cannot be considered a complete OpenClash replacement for LAN clients. Do not turn on a public listener to make it transparent: a separate audited TUN/firewall4 integration with authentication, DNS and IPv6 leak tests is necessary.
+
+## Direct-only SOCKS5 UDP
+
+The loopback SOCKS5 proxy implements UDP ASSOCIATE bound to its TCP association and a single UDP client source port. Direct outbound datagrams and domain block rules work. Unsupported FRAG packets and encrypted proxy outbounds are rejected/dropped. This does not implement Hysteria2 or remote UDP tunneling.
