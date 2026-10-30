@@ -71,7 +71,7 @@ func (s *Server) httpConnect(conn net.Conn, reader *bufio.Reader) {
 	}
 	defer req.Body.Close()
 	if req.Method != http.MethodConnect {
-		_, _ = io.WriteString(conn, "HTTP/1.1 405 Method Not Allowed\r\nConnection: close\r\nContent-Length: 0\r\n\r\n")
+		s.forwardHTTP(conn, req)
 		return
 	}
 	host, port, err := net.SplitHostPort(req.Host)
@@ -85,7 +85,9 @@ func (s *Server) httpConnect(conn net.Conn, reader *bufio.Reader) {
 	}
 	dest, err := s.dialTarget(host, port)
 	if err != nil {
-		_, _ = io.WriteString(conn, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n")
+		status := "502 Bad Gateway"
+		if errors.Is(err,ErrBlocked) {status="403 Forbidden"}
+		_, _ = io.WriteString(conn, "HTTP/1.1 "+status+"\r\nContent-Length: 0\r\n\r\n")
 		return
 	}
 	defer dest.Close()
@@ -150,7 +152,11 @@ func (s *Server) socks5(conn net.Conn, reader *bufio.Reader) {
 	port := strconv.Itoa(int(binary.BigEndian.Uint16(portBuf)))
 	dest, err := s.dialTarget(host, port)
 	if err != nil {
-		socksReply(conn, 5)
+		if errors.Is(err,ErrBlocked) {
+			socksReply(conn,2)
+		} else {
+			socksReply(conn,5)
+		}
 		return
 	}
 	defer dest.Close()

@@ -32,7 +32,7 @@ func (s *Server) dialTarget(host, port string) (net.Conn,error) {
 		return net.DialTimeout("tcp",target,s.dialTimeout)
 	}
 	route,blocked:=s.config.OutboundFor(host)
-	if blocked {return nil,errors.New("blocked by routing policy")}
+	if blocked {return nil,ErrBlocked}
 	timeout:=s.config.Deadline()
 	ctx,cancel:=context.WithTimeout(context.Background(),timeout)
 	defer cancel()

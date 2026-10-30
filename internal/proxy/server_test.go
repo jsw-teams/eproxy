@@ -53,7 +53,7 @@ func TestHTTPConnect(t *testing.T) {
 	if err != nil || string(data) != "hello" { t.Fatalf("relay %q %v", data, err) }
 }
 
-func TestHTTPRejectsGET(t *testing.T) {
+func TestHTTPRejectsRelativeGET(t *testing.T) {
 	p := proxyServer(t)
 	c, err := net.Dial("tcp", p.Addr().String())
 	if err != nil { t.Fatal(err) }
@@ -61,7 +61,7 @@ func TestHTTPRejectsGET(t *testing.T) {
 	_ = c.SetDeadline(time.Now().Add(3*time.Second))
 	_, _ = io.WriteString(c, "GET / HTTP/1.1\r\nHost: example.test\r\n\r\n")
 	line, err := bufio.NewReader(c).ReadString('\n')
-	if err != nil || !strings.Contains(line, "405") { t.Fatalf("unexpected %q %v", line, err) }
+	if err != nil || !strings.Contains(line, "400") { t.Fatalf("unexpected %q %v", line, err) }
 }
 
 func TestSOCKS5Connect(t *testing.T) {
