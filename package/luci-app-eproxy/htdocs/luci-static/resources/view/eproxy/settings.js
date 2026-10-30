@@ -58,12 +58,11 @@ return view.extend({
 		o = s.option(form.Value, 'dns_remote', _('Upstream DNS server IP'));
 		o.default = '1.1.1.1';
 		o.datatype = 'ipaddr';
-		o.description = _('Proxy engine DNS resolver. Choose trusted IPv4 or IPv6 recursive server.');
+		o.description = _('Verified DoH bootstrap IP. Native direct traffic and advanced engine DNS use this setting; never falls back to plaintext DNS in the native direct path.');
 
 		o = s.option(form.Value, 'dns_server_name', _('DNS-over-HTTPS TLS server name'));
 		o.default = 'cloudflare-dns.com';
-		o.depends('engine', 'singbox');
-		o.description = _('DNS uses verified HTTPS rather than plaintext UDP.');
+		o.description = _('TLS hostname for the pinned DoH IP. Native DNS requests validate this certificate.');
 
 		o = s.option(form.Value, 'tun_interface', _('Managed LAN interface'));
 		o.depends('enable_tun', '1');

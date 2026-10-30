@@ -4,6 +4,7 @@ package proxy
 // Deliberately bound to 127.0.0.1, with each association tied to its
 // authenticated TCP control connection and a single UDP source.
 import (
+    "context"
     "encoding/binary"
     "errors"
     "io"
@@ -85,7 +86,16 @@ func (s *Server) udpAssociate(control net.Conn,reader io.Reader,atype byte) {
             blocked:=false
             if s.config!=nil {ob,blocked=s.config.OutboundFor(host)}
             if blocked || ob.Type!="direct" {continue}
-            target,err:=net.ResolveUDPAddr("udp",net.JoinHostPort(host,dport))
+            addr:=net.JoinHostPort(host,dport)
+            // Resolve UDP targets through the same native DoH policy.
+            if s.resolver!=nil {
+                ctx,cancel:=context.WithTimeout(context.Background(),s.dialTimeout)
+                ips,resolveErr:=s.resolver.LookupIP(ctx,host)
+                cancel()
+                if resolveErr!=nil || len(ips)==0 {continue}
+                addr=net.JoinHostPort(ips[0].String(),dport)
+            }
+            target,err:=net.ResolveUDPAddr("udp",addr)
             if err!=nil {continue}
             select {
             case workers<-struct{}{}:

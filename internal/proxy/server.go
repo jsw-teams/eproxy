@@ -17,6 +17,7 @@ import (
 type Server struct {
 	dialTimeout time.Duration
 	config *Config
+	resolver *NativeResolver
 	slots chan struct{}
 }
 
@@ -31,6 +32,11 @@ func NewWithConfig(cfg Config) (*Server,error) {
 	if err:=cfg.Validate();err!=nil{return nil,err}
 	s:=New(cfg.Deadline())
 	s.config=&cfg
+	if cfg.Engine=="native" {
+		resolver,err:=NewNativeResolver(cfg)
+		if err!=nil{return nil,err}
+		s.resolver=resolver
+	}
 	return s,nil
 }
 

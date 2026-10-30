@@ -38,7 +38,7 @@ func (s *Server) dialTarget(host, port string) (net.Conn,error) {
 	defer cancel()
 	switch route.Type {
 	case "direct":
-		return (&net.Dialer{Timeout:timeout}).DialContext(ctx,"tcp",target)
+		return s.dialDirect(ctx,host,port)
 	case "http":
 		return dialHTTP(ctx,route,target)
 	case "socks5":
@@ -170,4 +170,23 @@ func encodeTarget(target string)([]byte,error) {
 	out:=make([]byte,2)
 	binary.BigEndian.PutUint16(out,uint16(n))
 	return append(payload,out...),nil
+}
+
+
+// dialDirect resolves with eproxy's own verified DoH transport. A DNS
+// failure never falls back to the OS resolver or cleartext port 53.
+func (s *Server) dialDirect(ctx context.Context,host,port string)(net.Conn,error){
+	if s.resolver==nil {
+		return (&net.Dialer{Timeout:s.dialTimeout}).DialContext(ctx,"tcp",net.JoinHostPort(host,port))
+	}
+	ips,err:=s.resolver.LookupIP(ctx,host)
+	if err!=nil {return nil,err}
+	dialer:=&net.Dialer{Timeout:s.dialTimeout}
+	var last error
+	for _,ip:=range ips {
+		c,err:=dialer.DialContext(ctx,"tcp",net.JoinHostPort(ip.String(),port))
+		if err==nil{return c,nil}
+		last=err
+	}
+	return nil,last
 }
