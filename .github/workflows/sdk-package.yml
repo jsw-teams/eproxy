@@ -1,0 +1,81 @@
+name: OpenWrt 25.12.6 SDK — eproxy APK
+
+on:
+  push:
+    paths:
+      - 'cmd/**'
+      - 'internal/**'
+      - 'package/**'
+      - 'go.mod'
+      - '.github/workflows/sdk-package.yml'
+  pull_request:
+    paths:
+      - 'cmd/**'
+      - 'internal/**'
+      - 'package/**'
+      - 'go.mod'
+      - '.github/workflows/sdk-package.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-eproxy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SDK dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y zstd build-essential gcc g++ gawk gettext git python3 python3-setuptools rsync unzip file wget curl libncurses-dev libssl-dev
+      - name: Download official and SHA256-verified SDK
+        env:
+          SDK: openwrt-sdk-25.12.6-qualcommax-ipq807x_gcc-14.3.0_musl.Linux-x86_64.tar.zst
+          SDK_SHA256: 4ce05fafa54286032e3e2de80806256965812507b6abdf7c7e7a615bdf5dc94f
+        run: |
+          curl --fail --location --retry 3 --output sdk.tar.zst "https://downloads.openwrt.org/releases/25.12.6/targets/qualcommax/ipq807x/$SDK"
+          echo "$SDK_SHA256  sdk.tar.zst" | sha256sum --check
+          mkdir -p sdk
+          tar --use-compress-program=unzstd -xf sdk.tar.zst -C sdk --strip-components=1
+      - name: Install Go / LuCI feeds only
+        run: |
+          cd sdk
+          ./scripts/feeds update packages luci
+          ./scripts/feeds install -p packages golang
+          ./scripts/feeds install -p luci luci-base
+      - name: Add eproxy package sources
+        run: |
+          cp -R package/eproxy-core sdk/package/eproxy-core
+          cp -R package/luci-app-eproxy sdk/package/luci-app-eproxy
+          mkdir -p sdk/package/eproxy-core/src
+          cp go.mod LICENSE sdk/package/eproxy-core/src/
+          cp -R cmd internal sdk/package/eproxy-core/src/
+      - name: Resolve APK package configuration
+        run: |
+          cd sdk
+          printf '\nCONFIG_PACKAGE_eproxy-core=m\nCONFIG_PACKAGE_luci-app-eproxy=m\n' >> .config
+          make defconfig
+          grep -E '^CONFIG_PACKAGE_(eproxy-core|luci-app-eproxy)=' .config
+          grep -Eq '^CONFIG_PACKAGE_eproxy-core=[my]$' .config
+          grep -Eq '^CONFIG_PACKAGE_luci-app-eproxy=[my]$' .config
+      - name: Build actual OpenWrt APK packages
+        run: |
+          cd sdk
+          make -j2 package/eproxy-core/compile package/luci-app-eproxy/compile V=s
+          find bin/packages -type f \( -name 'eproxy-core_*.apk' -o -name 'luci-app-eproxy_*.apk' \) -print
+          test "$(find bin/packages -name 'eproxy-core_*.apk' | wc -l)" -gt 0
+          test "$(find bin/packages -name 'luci-app-eproxy_*.apk' | wc -l)" -gt 0
+      - name: Experimental APK artifacts (NOT for unvalidated routers)
+        uses: actions/upload-artifact@v4
+        with:
+          name: eproxy-openwrt-25.12.6-ipq807x-APK-EXPERIMENTAL
+          path: |
+            sdk/bin/packages/**/eproxy-core_*.apk
+            sdk/bin/packages/**/luci-app-eproxy_*.apk
+          retention-days: 7

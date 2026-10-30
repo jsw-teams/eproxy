@@ -21,6 +21,10 @@ jobs:
         run: go test -race -count=1 ./...
       - name: Static analysis
         run: go vet ./...
+      - name: LuCI UI runtime contract
+        run: |
+          node --check package/luci-app-eproxy/htdocs/luci-static/resources/view/eproxy/settings.js
+          node tests/luci_ui.test.js
       - name: Linux arm64 cross compile
         run: |
           mkdir -p dist

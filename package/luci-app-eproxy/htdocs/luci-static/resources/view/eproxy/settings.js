@@ -26,6 +26,7 @@ return view.extend({
 		var running = Object.keys(instances).some(function(key) {
 			return instances[key] && instances[key].running === true;
 		});
+		var knownNodes = uci.sections('eproxy', 'outbound') || [];
 		var m = new form.Map('eproxy', _('eproxy — Proxy Manager'),
 			_('Configure the local proxy, outbounds and ordered domain rules. ' +
 			  'Save & Apply to reload the procd service. Settings are shared with the Go daemon via UCI. ' +
@@ -56,6 +57,8 @@ return view.extend({
 		o.password = true;
 
 		o = s.option(form.Value, 'default_outbound', _('Default outbound'));
+		o.value('direct', _('Direct'));
+		knownNodes.forEach(function(node) { o.value(node['.name'], node['.name']); });
 		o.default = 'direct';
 		o.rmempty = false;
 		o.description = _('Enter the section ID of an outbound below. "direct" is installed by default.');
@@ -128,6 +131,8 @@ return view.extend({
 		o.placeholder = 'example.com';
 
 		o = s.option(form.Value, 'outbound', _('Action / outbound name'));
+		o.value('block', _('Block'));
+		knownNodes.forEach(function(node) { o.value(node['.name'], node['.name']); });
 		o.rmempty = false;
 		o.placeholder = 'direct';
 		o.description = _('Use a named outbound or "block". Rules apply only to destination names available to eproxy; no DNS interception is performed.');
