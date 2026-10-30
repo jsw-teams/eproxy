@@ -16,6 +16,10 @@ on:
       - 'internal/**'
       - 'go.mod'
 
+concurrency:
+  group: eproxy-openwrt-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
