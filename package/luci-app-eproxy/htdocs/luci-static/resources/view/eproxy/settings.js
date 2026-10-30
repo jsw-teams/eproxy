@@ -60,6 +60,11 @@ return view.extend({
 		o.datatype = 'ipaddr';
 		o.description = _('Proxy engine DNS resolver. Choose trusted IPv4 or IPv6 recursive server.');
 
+		o = s.option(form.Value, 'dns_server_name', _('DNS-over-HTTPS TLS server name'));
+		o.default = 'cloudflare-dns.com';
+		o.depends('engine', 'singbox');
+		o.description = _('DNS uses verified HTTPS rather than plaintext UDP.');
+
 		o = s.option(form.Value, 'tun_interface', _('Managed LAN interface'));
 		o.depends('enable_tun', '1');
 		o.default = 'br-lan';

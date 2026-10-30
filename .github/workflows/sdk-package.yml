@@ -46,6 +46,14 @@ jobs:
           echo "$SHA256  sdk.tar.zst" | sha256sum --check
           mkdir -p sdk
           tar --use-compress-program=unzstd -xf sdk.tar.zst -C sdk --strip-components=1
+      - name: Match official firmware release feed revisions
+        env:
+          VERSION: ${{ matrix.version }}
+        run: |
+          curl --fail --location --retry 3 --output feeds.buildinfo "https://downloads.openwrt.org/releases/$VERSION/targets/qualcommax/ipq807x/feeds.buildinfo"
+          grep -E '^src-git (packages|luci) ' feeds.buildinfo > sdk/feeds.conf
+          test "$(wc -l < sdk/feeds.conf)" = 2
+          cat sdk/feeds.conf
       - name: Minimal Go and LuCI feeds
         run: |
           cd sdk

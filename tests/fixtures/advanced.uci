@@ -1,0 +1,41 @@
+config eproxy 'main'
+	option enabled '0'
+	option engine 'singbox'
+	option listen '127.0.0.1:1080'
+	option enable_tun '1'
+	option tun_interface 'br-lan'
+	option dns_strategy 'prefer_ipv6'
+	option dns_remote '1.1.1.1'
+	option default_outbound 'hy2'
+	option dial_timeout_seconds '10'
+
+config outbound 'direct'
+	option type 'direct'
+
+config outbound 'hy2'
+	option type 'hysteria2'
+	option address 'hy.example:443'
+	option server_name 'hy.example'
+	option password 'test-hysteria-password'
+
+config outbound 'reality'
+	option type 'vless-reality'
+	option address 'v.example:443'
+	option server_name 'www.example.com'
+	option uuid '4e52614c-1e02-4527-9254-f6e8beeb53e8'
+	option reality_public_key 'jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0'
+	option reality_short_id '0123456789abcdef'
+
+config outbound 'ss2022'
+	option type 'shadowsocks-2022'
+	option address 'ss.example:443'
+	option method '2022-blake3-aes-256-gcm'
+	option password 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8='
+
+config rule
+	option domain_suffix 'blocked.example'
+	option outbound 'block'
+
+config rule
+	option domain_suffix 'v.example'
+	option outbound 'reality'

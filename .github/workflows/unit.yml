@@ -31,6 +31,18 @@ jobs:
           go run ./cmd/eproxy -config examples/direct.json -check-config
           sh -n package/eproxy-core/files/eproxy.init
           python3 -m json.tool package/luci-app-eproxy/root/usr/share/rpcd/acl.d/luci-app-eproxy.json > /dev/null
+      - name: Validate advanced config with pinned official sing-box 1.14.0
+        run: |
+          curl --fail --location --retry 3 --output singbox.tar.gz https://github.com/SagerNet/sing-box/releases/download/v1.14.0/sing-box-1.14.0-linux-amd64.tar.gz
+          echo '2375de6999f4f56ab46b4fc5ddf26a6aba1d3e61a0f4e7ddec2f4690457d5f63  singbox.tar.gz' | sha256sum --check
+          tar -xzf singbox.tar.gz
+          mkdir -p advanced
+          cp tests/fixtures/advanced.uci advanced/eproxy.uci
+          chmod 0600 advanced/eproxy.uci
+          go run ./cmd/eproxy -uci advanced/eproxy.uci -export-singbox advanced/singbox.json
+          ./sing-box-1.14.0-linux-amd64/sing-box check -c advanced/singbox.json
+          python3 -m json.tool advanced/singbox.json > /dev/null
+          test "$(stat -c '%a' advanced/singbox.json)" = 600
       - name: Linux arm64 cross compile
         run: |
           mkdir -p dist

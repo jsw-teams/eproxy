@@ -1,24 +1,7 @@
 name: OpenWrt official arm64 package build
+# Full cross-toolchain fallback; use the dual-version SDK build as the default CI.
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - '.github/workflows/openwrt-package.yml'
-      - 'package/**'
-      - 'cmd/**'
-      - 'internal/**'
-      - 'go.mod'
-  pull_request:
-    paths:
-      - '.github/workflows/openwrt-package.yml'
-      - 'package/**'
-      - 'cmd/**'
-      - 'internal/**'
-      - 'go.mod'
-
-concurrency:
-  group: eproxy-openwrt-${{ github.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: read

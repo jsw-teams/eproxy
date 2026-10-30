@@ -81,6 +81,7 @@ func LoadUCI(path string) (Config, error) {
                 case "enable_tun": if value!="0" && value!="1" {return fail("invalid enable_tun flag")};cfg.EnableTUN=value=="1"
                 case "dns_strategy": cfg.DNSStrategy=value
                 case "dns_remote": cfg.DNSRemote=value
+                case "dns_server_name": cfg.DNSServerName=value
                 case "tun_interface": cfg.TUNInterface=value
                 case "listen": cfg.Listen = value
 				case "username": cfg.Username = value

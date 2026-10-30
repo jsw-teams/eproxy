@@ -18,6 +18,7 @@ type Config struct {
     EnableTUN bool `json:"enable_tun,omitempty"`
     DNSStrategy string `json:"dns_strategy,omitempty"`
     DNSRemote string `json:"dns_remote,omitempty"`
+    DNSServerName string `json:"dns_server_name,omitempty"`
     TUNInterface string `json:"tun_interface,omitempty"`
     Subscriptions []Subscription `json:"subscriptions,omitempty"`
 	Listen string `json:"listen"`
@@ -55,6 +56,7 @@ func DefaultConfig() Config {
 		Engine: "native",
         DNSStrategy:"prefer_ipv4",
         DNSRemote:"1.1.1.1",
+        DNSServerName:"cloudflare-dns.com",
         Listen: "127.0.0.1:1080",
 		DefaultOutbound: "direct",
 		Outbounds: map[string]Outbound{"direct": {Type:"direct"}},
@@ -115,6 +117,7 @@ func (c *Config) Validate() error {
     default:return errors.New("invalid DNS/IPv6 strategy")
     }
     if c.DNSRemote=="" {c.DNSRemote="1.1.1.1"}
+    if c.DNSServerName=="" {c.DNSServerName="cloudflare-dns.com"}
     if ip:=net.ParseIP(c.DNSRemote);ip==nil || !ip.IsGlobalUnicast() {
         return errors.New("dns_remote must be a public IP address")
     }

@@ -80,7 +80,9 @@ func SingBoxDocument(cfg Config) ([]byte, error) {
 		},
 		"dns":map[string]interface{}{
 			"servers":[]map[string]interface{}{
-				{"type":"udp","tag":"eproxy-dns","server":cfg.DNSRemote},
+				{"type":"https","tag":"eproxy-dns","server":cfg.DNSRemote,
+					"server_port":443,"path":"/dns-query",
+					"tls":map[string]interface{}{"enabled":true,"server_name":cfg.DNSServerName}},
 			},
 			"final":"eproxy-dns","strategy":cfg.DNSStrategy,
 		},
