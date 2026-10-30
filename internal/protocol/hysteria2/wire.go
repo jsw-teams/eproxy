@@ -15,6 +15,8 @@ import (
     "fmt"
     "io"
     "net"
+    "strconv"
+    "strings"
 )
 
 const (
@@ -52,8 +54,10 @@ func readVarInt(r io.ByteReader)(uint64,error) {
 }
 func validAddress(addr string)bool {
     host,port,err:=net.SplitHostPort(addr)
-    if err!=nil || host=="" || port=="" || len(addr)>maxAddress{return false}
-    return true
+    if err!=nil || host=="" || port=="" || len(addr)>maxAddress ||
+        strings.ContainsAny(host,"\x00\r\n /") {return false}
+    n,e:=strconv.Atoi(port)
+    return e==nil && n>0 && n<=65535
 }
 func WriteTCPRequest(w io.Writer,addr string,padding []byte)error {
     if !validAddress(addr) {return errors.New("invalid Hysteria2 TCP target")}

@@ -36,9 +36,11 @@ type NativeResolver struct {
 // cfg.DNSServerName. Requests never follow redirects or fall back to UDP/53.
 func NewNativeResolver(cfg Config) (*NativeResolver, error) {
     ip,err:=netip.ParseAddr(cfg.DNSRemote)
-    if err!=nil || !ip.IsGlobalUnicast() {return nil,errors.New("DNS bootstrap IP must be globally routable")}
-    if cfg.DNSServerName=="" || strings.ContainsAny(cfg.DNSServerName," /:\r\n") {
-        return nil,errors.New("DNS TLS name missing or invalid")
+    if err!=nil || !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() || ip.IsMulticast() {
+        return nil,errors.New("DNS bootstrap IP must be a public unicast address")
+    }
+    if err:=validDNSName(strings.ToLower(cfg.DNSServerName));err!=nil {
+        return nil,fmt.Errorf("DNS TLS server name: %w",err)
     }
     dial:= &net.Dialer{Timeout:6*time.Second}
     transport:= &http.Transport{

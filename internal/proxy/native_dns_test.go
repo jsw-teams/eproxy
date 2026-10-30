@@ -104,8 +104,10 @@ func TestDoHNetworkErrorDoesNotFallback(t *testing.T) {
 }
 func TestPinnedBootstrapAndDNSNameValidation(t *testing.T) {
     cfg:=DefaultConfig()
-    cfg.DNSRemote="127.0.0.1"
-    if _,err:=NewNativeResolver(cfg);err==nil{t.Fatal("accepted local DoH bootstrap")}
+    for _,address:=range []string{"127.0.0.1","192.168.1.1","10.0.0.53","169.254.2.1","::1"} {
+        cfg.DNSRemote=address
+        if _,err:=NewNativeResolver(cfg);err==nil{t.Errorf("accepted unsafe DoH bootstrap %s",address)}
+    }
     for _,host:=range []string{"","bad..example","bad_label.example","-bad.example",strings.Repeat("a",64)+".com"}{
         if err:=validDNSName(host);err==nil {t.Errorf("accepted malformed hostname %q",host)}
     }
